@@ -1,0 +1,360 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_absolute_error
+
+full_data = pd.read_csv('/datasets/gold_recovery_full.csv', index_col = 'date')
+train_data = pd.read_csv('/datasets/gold_recovery_train.csv', index_col = 'date')
+test_data = pd.read_csv('/datasets/gold_recovery_test.csv', index_col = 'date')
+
+def recovery_result (c, f, t):
+    result = (c * (f - t) / (f*(c - t))) * 100
+    return result
+    
+c_val = train_data['rougher.output.concentrate_au'] 
+f_val = train_data['rougher.input.feed_au'] 
+t_val = train_data['rougher.output.tail_au']
+
+rougher_output_recovery_calculated = recovery_result(c_val, f_val, t_val)
+rougher_output_recovery_calculated = rougher_output_recovery_calculated.dropna()
+rougher_output_recovery_calculated.isnull().sum()
+
+real_rought_output_recovery = full_data['rougher.output.recovery']
+real_rought_output_recovery = real_rought_output_recovery[rougher_output_recovery_calculated.index]
+real_rought_output_recovery = real_rought_output_recovery.dropna()
+rougher_output_recovery_calculated = rougher_output_recovery_calculated[real_rought_output_recovery.index]
+
+mae = mean_absolute_error(real_rought_output_recovery, rougher_output_recovery_calculated)
+print('MAE:', mae)
+
+#Fetures analysis, which wasn't included in test data set.
+
+test_column_names = list(test_data.columns)
+full_column_names = list(full_data.columns)
+missing_features = []
+
+for i in full_column_names:
+    if i not in test_column_names:
+        missing_features.append(i)
+
+missing_features
+
+c_val_full = full_data['rougher.output.concentrate_au'] 
+f_val_full = full_data['rougher.input.feed_au'] 
+t_val_full = full_data['rougher.output.tail_au']
+
+full_data['rougher.output.recovery'] = recovery_result(c_val_full, f_val_full, t_val_full)
+full_data['rougher.output.recovery'].isnull().sum()
+
+fd_columns_list_without_target = [] #in this list should be placed a lot of features without targets
+
+full_data_without_targets = full_data[fd_columns_list_without_target]
+    
+full_data_without_targets = full_data_without_targets.fillna(method = 'ffill')
+
+full_data[fd_columns_list_without_target] = full_data_without_targets
+
+def data_overfill (full, recovering_data):
+    columns = list(recovering_data.columns)
+    changed_full = full[columns]
+    result = changed_full.loc[recovering_data.index]
+    return result
+
+def filled_target_features (full, recovering_data):
+    recovering_data = pd.DataFrame(recovering_data)
+    full = full.loc[recovering_data.index]
+    return full
+    
+def filled_target_features_for_test (full, recovering_data):
+    recovering_data = pd.DataFrame(recovering_data)
+    full = full.loc[recovering_data.index]
+    recovering_data [['rougher.output.recovery', 'final.output.recovery']] = full[['rougher.output.recovery', 'final.output.recovery']]
+    return recovering_data
+
+test_data = filled_target_features_for_test(full_data, test_data)
+train_data = filled_target_features_for_test(full_data, train_data)
+test_data.dropna(subset = ['rougher.output.recovery', 'final.output.recovery'], inplace = True)
+train_data.dropna(subset = ['rougher.output.recovery', 'final.output.recovery'], inplace = True)
+
+#Data analysis
+
+au_concentration_columns = ['rougher.output.concentrate_au', 'primary_cleaner.output.concentrate_au', 'final.output.concentrate_au']
+ag_concentration_columns = ['rougher.output.concentrate_ag', 'primary_cleaner.output.concentrate_ag', 'final.output.concentrate_ag']
+pb_concentration_columns = ['rougher.output.concentrate_pb', 'primary_cleaner.output.concentrate_pb', 'final.output.concentrate_pb']
+
+full_data[au_concentration_columns].hist(bins = 50, figsize = (16,8))
+full_data[ag_concentration_columns].hist(bins = 50, color = 'r', figsize = (16,8))
+full_data[pb_concentration_columns].hist(bins = 50, color = 'g', figsize = (16,8))
+
+test_data['rougher.input.feed_size'].plot(kind='hist', bins = 100)
+train_data['rougher.input.feed_size'].plot(kind='hist', bins = 100, alpha = 0.5)
+plt.xlim(0,150)
+plt.title('rougher.input.feed_size')
+plt.show()
+
+test_data['primary_cleaner.input.feed_size'].plot(kind='hist', bins = 100)
+train_data['primary_cleaner.input.feed_size'].plot(kind='hist', bins = 100, alpha = 0.5)
+plt.xlim()
+plt.title('primary_cleaner.input.feed_size')
+plt.show()
+
+
+def conc_data_filling (full, recovering_data):
+    recovering_data = pd.DataFrame(recovering_data)
+    full = full.loc[recovering_data.index]
+    recovering_data[[
+        'final.output.concentrate_au', 'final.output.concentrate_ag',
+        'final.output.concentrate_pb', 'final.output.concentrate_sol',
+        'primary_cleaner.output.concentrate_au', 'primary_cleaner.output.concentrate_ag',
+        'primary_cleaner.output.concentrate_pb', 'primary_cleaner.output.concentrate_sol',
+        'rougher.output.concentrate_au', 'rougher.output.concentrate_ag',
+        'rougher.output.concentrate_pb', 'rougher.output.concentrate_sol']] = full[['final.output.concentrate_au', 'final.output.concentrate_ag',
+        'final.output.concentrate_pb', 'final.output.concentrate_sol',
+        'primary_cleaner.output.concentrate_au', 'primary_cleaner.output.concentrate_ag',
+        'primary_cleaner.output.concentrate_pb', 'primary_cleaner.output.concentrate_sol',
+        'rougher.output.concentrate_au', 'rougher.output.concentrate_ag',
+        'rougher.output.concentrate_pb', 'rougher.output.concentrate_sol']]
+    return recovering_data
+ 
+final_concentrate_columns = [
+    'final.output.concentrate_au', 'final.output.concentrate_ag',
+    'final.output.concentrate_pb', 'final.output.concentrate_sol']
+primary_concentrate_columns = [
+    'primary_cleaner.output.concentrate_au', 'primary_cleaner.output.concentrate_ag',
+    'primary_cleaner.output.concentrate_pb', 'primary_cleaner.output.concentrate_sol']
+rought_concentrate_columns = [
+    'rougher.output.concentrate_au', 'rougher.output.concentrate_ag',
+    'rougher.output.concentrate_pb', 'rougher.output.concentrate_sol']
+    
+test_data_conc = conc_data_filling(full_data, test_data)
+train_data_conc = conc_data_filling(full_data, train_data)
+
+sum_concentradte_data = full_data
+sum_concentradte_data['final_total_concentrate'] = sum_concentradte_data[final_concentrate_columns].sum(axis =1)
+sum_concentradte_data['primary_total_concentrate'] = sum_concentradte_data[primary_concentrate_columns].sum(axis =1)
+sum_concentradte_data['rought_total_concentrate'] = sum_concentradte_data[rought_concentrate_columns].sum(axis =1)
+
+sum_concentradte_data['final_total_concentrate'].plot(kind='hist', bins = 100, legend = True)
+sum_concentradte_data['primary_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+sum_concentradte_data['rought_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+plt.xlim(0)
+plt.title('Data comparing on different stages')
+plt.show()
+
+sum_concentradte_test_data = test_data_conc
+sum_concentradte_test_data['final_total_concentrate'] = sum_concentradte_test_data[final_concentrate_columns].sum(axis =1)
+sum_concentradte_test_data['primary_total_concentrate'] = sum_concentradte_test_data[primary_concentrate_columns].sum(axis =1)
+sum_concentradte_test_data['rought_total_concentrate'] = sum_concentradte_test_data[rought_concentrate_columns].sum(axis =1)
+
+sum_concentradte_test_data['final_total_concentrate'].plot(kind='hist', bins = 100, legend = True)
+sum_concentradte_test_data['primary_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+sum_concentradte_test_data['rought_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+plt.xlim()
+plt.title('Data comparing on different stages(test_data)')
+plt.show()
+
+sum_concentradte_train_data = train_data_conc
+sum_concentradte_train_data['final_total_concentrate'] = sum_concentradte_train_data[final_concentrate_columns].sum(axis =1)
+sum_concentradte_train_data['primary_total_concentrate'] = sum_concentradte_train_data[primary_concentrate_columns].sum(axis =1)
+sum_concentradte_train_data['rought_total_concentrate'] = sum_concentradte_train_data[rought_concentrate_columns].sum(axis =1)
+
+sum_concentradte_train_data['final_total_concentrate'].plot(kind='hist', bins = 100, legend = True)
+sum_concentradte_train_data['primary_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+sum_concentradte_train_data['rought_total_concentrate'].plot(kind='hist', bins = 100, alpha = 0.5, legend = True)
+plt.xlim()
+plt.title('Сравнение распределений суммарной концентрации веществ на разных стадиях (тренировочная выборка)')
+plt.show()
+
+
+#Model creating
+
+def smape (answers, predictions):
+    result = 100/len(answers) * np.sum(2 * np.abs(
+        predictions - answers) / (np.abs(answers) + np.abs(predictions)))
+    return result
+
+
+def final_smape (answers_rougher, predictions_rougher, answers_final, predictions_final):
+    rought = 100/len(answers_rougher) * np.sum(2 * np.abs(
+        predictions_rougher - answers_rougher) / (np.abs(answers_rougher) + np.abs(predictions_rougher)))
+    final = 100/len(answers_final) * np.sum(2 * np.abs(
+        predictions_final - answers_final) / (np.abs(answers_final) + np.abs(predictions_final)))
+    
+    return rought*0.25 + final*0.75
+
+def smape_sec_ed(rought, final):
+    return rought*0.25 + final*0.75
+    
+    
+from sklearn.metrics import make_scorer
+scorer = make_scorer(smape)
+
+train_data_sample = sum_concentradte_train_data[test_data.columns]
+train_data_sample = train_data_sample.dropna()
+test_data = sum_concentradte_test_data[test_data.columns]
+test_data = test_data.dropna()
+
+train_target_rought = train_data_sample['rougher.output.recovery']
+train_target_final = train_data_sample['final.output.recovery']
+train_features = train_data_sample.drop(['rougher.output.recovery','final.output.recovery'], axis=1)
+
+
+test_target_rought = test_data['rougher.output.recovery']
+test_target_final = test_data['final.output.recovery']
+test_features = test_data.drop(['rougher.output.recovery','final.output.recovery'], axis=1)
+
+from sklearn.preprocessing import StandardScaler
+
+numeric = [] #here should be placed features
+
+train_features_rought = train_data_sample[[]] #here should be placed features
+
+test_features_rought = test_data[[]] #here should be placed features
+
+scaler = StandardScaler()
+scaler.fit(train_features[numeric])
+train_features[numeric] = scaler.transform(train_features[numeric])                           
+test_features[numeric] = scaler.transform(test_features[numeric])
+
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+
+#Linear regression
+
+model_linear = LinearRegression()
+model_linear.fit(train_features, train_target_rought)
+model_predicted_rought = model_linear.predict(test_features)
+model_predicted_final = model_linear.predict(test_features)
+
+model_linear_cutted_data = LinearRegression()
+model_linear_cutted_data.fit(train_features_rought, train_target_rought)
+model_predicted_rought_cutted = model_linear_cutted_data.predict(test_features_rought)
+
+from sklearn.model_selection import cross_val_score
+
+rought_score_for_linear = cross_val_score(
+    model_linear, train_features, train_target_rought, cv=5, scoring = scorer).mean()
+rought_score_for_linear
+
+rought_score_for_linear_cutted = cross_val_score(
+    model_linear_cutted_data, train_features_rought, train_target_rought, cv=5, scoring = scorer).mean()
+    
+final_score_for_linear = cross_val_score(
+    model_linear, train_features, train_target_final, cv=5, scoring = scorer).mean()
+
+#Ridge regression
+
+from sklearn import linear_model
+ridge_reg = linear_model.Ridge(alpha=0.5)
+
+rought_score_ridge_reg_rought = cross_val_score(
+    ridge_reg, train_features_rought, train_target_rought, cv=5, scoring = scorer).mean()
+
+final_score_for_reg_rought = cross_val_score(
+    ridge_reg, train_features, train_target_final, cv=5, scoring = scorer).mean()
+    
+smape_ridge_reg = smape_sec_ed(rought_score_ridge_reg_rought, final_score_for_reg_rought)
+
+print('sMAPE Ridge regression:', smape_ridge_reg)
+
+#Support Vector Classification
+
+from sklearn import svm
+svm_model = svm.SVR(C = 1)
+
+rought_score_for_svm = cross_val_score(
+    svm_model, train_features_rought, train_target_rought, cv=5, scoring = scorer).mean()
+rought_score_for_svm
+
+final_score_for_svm = cross_val_score(
+    svm_model, train_features, train_target_final, cv=5, scoring = scorer).mean()
+final_score_for_svm
+
+smape_svm = smape_sec_ed(rought_score_for_svm, final_score_for_svm)
+smape_svm
+
+#reduction of features for training
+
+train_features_rought_extra_cutted = train_data_sample[[
+    'rougher.input.feed_ag','rougher.input.feed_pb', 'rougher.input.feed_rate', 'rougher.input.feed_size',
+    'rougher.input.feed_sol', 'rougher.input.feed_au', 'rougher.input.floatbank10_sulfate', 
+    'rougher.input.floatbank10_xanthate', 'rougher.input.floatbank11_sulfate', 
+    'rougher.input.floatbank11_xanthate']] #this features were cutted
+
+test_features_rought_extra_cutted = test_data[[
+    'rougher.input.feed_ag','rougher.input.feed_pb', 'rougher.input.feed_rate', 'rougher.input.feed_size',
+    'rougher.input.feed_sol', 'rougher.input.feed_au', 'rougher.input.floatbank10_sulfate', 
+    'rougher.input.floatbank10_xanthate', 'rougher.input.floatbank11_sulfate', 
+    'rougher.input.floatbank11_xanthate']] #this features were cutted
+    
+svm_model_rought = svm.SVR()
+
+rought_score_for_svm_cutted = cross_val_score(
+    svm_model_rought, train_features_rought_extra_cutted, train_target_rought, cv=5, scoring = scorer).mean()
+print('sMAPE SVM with cutted number of features:', rought_score_for_svm_cutted)
+
+from sklearn.tree import DecisionTreeRegressor
+
+dec_tree = DecisionTreeRegressor(random_state=12345, max_depth=16,  max_leaf_nodes= 4)
+
+rought_score_for_dec_tree = cross_val_score(
+    dec_tree, train_features_rought_extra_cutted, train_target_rought, cv=5, scoring = scorer).mean()
+
+final_score_for_dec_tree = cross_val_score(
+    dec_tree, train_features, train_target_final, cv=5, scoring = scorer).mean()
+    
+smape_svm_dec_tree = smape_sec_ed(rought_score_for_dec_tree, final_score_for_dec_tree)
+print ('sMAPE DecisionTreeRegressor =', smape_svm_dec_tree)
+
+for i in range(1,10,2):
+    dec_tree = DecisionTreeRegressor(random_state=12345, max_depth=i,  max_leaf_nodes= 4)
+
+    rought_score_for_dec_tree = cross_val_score(
+        dec_tree, train_features_rought_extra_cutted, train_target_rought, cv=5, scoring = scorer).mean()
+
+    final_score_for_dec_tree = cross_val_score(
+        dec_tree, train_features, train_target_final, cv=5, scoring = scorer).mean()
+
+    smape_svm_dec_tree = smape_sec_ed(rought_score_for_dec_tree, final_score_for_dec_tree)
+    print('If max_depth =', i, 'sMAPE=', smape_svm_dec_tree)
+    
+from sklearn.ensemble import RandomForestRegressor
+
+for i in range(1,10):
+    rand_for = RandomForestRegressor(random_state=12345, n_estimators=i, max_depth=10,  max_leaf_nodes= 4)
+
+    rought_score_for_rand_for = cross_val_score(
+        rand_for, train_features_rought_extra_cutted, train_target_rought, cv=5, scoring = scorer).mean()
+
+    final_score_for_rand_for = cross_val_score(
+        rand_for, train_features, train_target_final, cv=5, scoring = scorer).mean()
+
+    smape_rand_for = smape_sec_ed(rought_score_for_rand_for, final_score_for_rand_for)
+    print('If n_estimators =', i, 'sMAPE=', smape_rand_for)
+
+#Model checking on validation data
+
+svm_rought = svm_model_rought.fit(train_features_rought_extra_cutted, train_target_rought)
+svm_final = svm_model.fit(train_features, train_target_final)
+
+svm_model_predict_rought = svm_rought.predict(test_features_rought_extra_cutted)
+svm_model_predict_final = svm_final.predict(test_features)
+
+smape_svm_test = final_smape(test_target_rought, svm_model_predict_rought, test_target_final, svm_model_predict_final)
+smape_svm_test
+
+print ('sMAPE Support Vector Classification по тестовм данным:', smape_svm_test)
+print('sMAPE по средним данным:', mean_smape_linear)
+
+###
+Conclusions:
+1)The number of features of the training sample was adjusted to match the test sample. Anomalies have been cleared in the test and training dataframes.
+2) In accordance with the instructions, the functions for calculating smape and final smape were written.
+3) The smape function was made metric make_scorer and used for cross-validation.
+4) Two models were selected for testing. Classical Linear Regression and Support Vector Regression Model.
+5) Support vector regression model showed the best average result after cross-validation.
+6) Also, the support vector model outperformed the sample from the mean values in sMAPE.
+7) However, research on the test sample showed that the efficiency of the support vector model is lower,
+than average predictions.
+8)The effectiveness of the SupportVectorClassification in this particular case has not been proven.
+###
